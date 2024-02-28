@@ -6,7 +6,6 @@ from .views import (
     BookFlight,
     BookingList,
     BookingDetail,
-    PassengerList,
 )
 
 urlpatterns = [
@@ -16,5 +15,4 @@ urlpatterns = [
     path("book/", BookFlight.as_view(), name="book-flight"),
     path("bookings/", BookingList.as_view(), name="booking-list"),
     path("bookings/<int:pk>/", BookingDetail.as_view(), name="booking-detail"),
-    path("passengers/", PassengerList.as_view(), name="passenger-list"),
 ]

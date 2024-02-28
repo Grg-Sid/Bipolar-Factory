@@ -12,10 +12,11 @@ class FlightSerializer(serializers.ModelSerializer):
 class PassengerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Passengers
-        fields = "__all__"
+        fields = ["first_name", "last_name"]
 
 
 class BookingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Bookings
         fields = "__all__"
+
