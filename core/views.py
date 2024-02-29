@@ -1,8 +1,9 @@
-from django.contrib.auth import get_user_model
 from django.db import transaction
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
+from rest_framework.authtoken.models import Token
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework import status
 
 from .serializers import FlightSerializer, BookingSerializer
@@ -38,12 +39,29 @@ class FlightCreate(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class FlightDelete(APIView):
+    permission_classes = [IsAdminUser]
+
+    def delete(self, request, pk):
+        flight = Flights.objects.get(pk=pk)
+        flight.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class BookFlight(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        token_key = request.headers.get("Authorization").split(" ")[1]
+
+        try:
+            token = Token.objects.get(key=token_key)
+        except Token.DoesNotExist:
+            raise AuthenticationFailed("Invalid token")
+
+        user = token.user
+
         flight_id = request.data.get("flight_id")
-        user_id = request.data.get("user_id")
         passengers_data = request.data.get("passengers")
 
         if not all(
@@ -55,8 +73,12 @@ class BookFlight(APIView):
             )
 
         flight = Flights.objects.get(pk=flight_id)
-        User = get_user_model()
-        user = User.objects.get(pk=user_id)
+
+        if len(passengers_data) > flight.no_of_seats:
+            return Response(
+                {"error": "Not enough seats available"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         passengers = []
         for passenger_data in passengers_data:
@@ -65,12 +87,6 @@ class BookFlight(APIView):
                 last_name=passenger_data["last_name"],
             )
             passengers.append(passenger)
-
-        if len(passengers) > flight.no_of_seats:
-            return Response(
-                {"error": "Not enough seats available"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
         with transaction.atomic():
             booking = Bookings.objects.create(flight=flight, user=user)
@@ -89,10 +105,16 @@ class BookingList(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     def get(self, request):
-        if request.user.is_admin:
+        if request.user.is_staff:
             bookings = Bookings.objects.all()
         else:
-            bookings = Bookings.objects.filter(user=request.user)
+            token_key = request.headers.get("Authorization").split(" ")[1]
+            try:
+                token = Token.objects.get(key=token_key)
+            except Token.DoesNotExist:
+                raise AuthenticationFailed("Invalid token")
+
+            bookings = Bookings.objects.filter(user=token.user)
 
         serializer = BookingSerializer(bookings, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -111,7 +133,12 @@ class UserBookings(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
-        bookings = user.bookings_set.all()
+        token_key = request.headers.get("Authorization").split(" ")[1]
+        try:
+            token = Token.objects.get(key=token_key)
+        except Token.DoesNotExist:
+            raise AuthenticationFailed("Invalid token")
+
+        bookings = Bookings.objects.filter(user=token.user)
         serializer = BookingSerializer(bookings, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
