@@ -20,3 +20,13 @@ class BookingSerializer(serializers.ModelSerializer):
         model = Bookings
         fields = "__all__"
 
+    def to_representation(self, instance):
+        data = {
+            "id": instance.id,
+            "flight": {"flight_number": instance.flight.flight_number},
+            "passengers": [
+                {"first_name": passenger.first_name}
+                for passenger in instance.passengers.all()
+            ],
+        }
+        return data

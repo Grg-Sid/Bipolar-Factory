@@ -6,8 +6,9 @@ from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework import status
 
-from .serializers import FlightSerializer, BookingSerializer
+from .serializers import FlightSerializer, BookingSerializer, PassengerSerializer
 from .models import Flights, Bookings, Passengers
+from .permissions import IsAdminOrAuthenticatedUser
 
 
 class FlightList(APIView):
@@ -102,7 +103,7 @@ class BookFlight(APIView):
 
 
 class BookingList(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAdminOrAuthenticatedUser]
 
     def get(self, request):
         if request.user.is_staff:
@@ -116,8 +117,21 @@ class BookingList(APIView):
 
             bookings = Bookings.objects.filter(user=token.user)
 
-        serializer = BookingSerializer(bookings, many=True)
+        serializer = BookingSerializer(
+            bookings, many=True, context={"request": request}
+        )
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def to_representation(self, instance):
+        data = {
+            "id": instance.id,
+            "flight": {"flight_number": instance.flight.flight_number},
+            "passengers": [
+                {"first_name": passenger.first_name}
+                for passenger in instance.passengers.all()
+            ],
+        }
+        return data
 
 
 class BookingDetail(APIView):
